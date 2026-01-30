@@ -1,0 +1,21 @@
+Full-Stack Developer – Introduction
+
+Hello,
+
+I hope this message finds you well. I came across your email address through a Google Group and wanted to reach out directly—my apologies for the unexpected contact.
+
+I am a full-stack developer with experience building and maintaining modern web applications across the entire development lifecycle. My background includes frontend UI/UX development, backend architecture and logic, third-party integrations, performance optimization, and deployment of scalable, production-ready solutions.
+
+While I have worked extensively with e-commerce platforms such as Shopify (including custom apps and themes), my experience also extends beyond that to custom web applications and websites built using modern frameworks and technologies. I place a strong emphasis on clean, maintainable code and on delivering solutions that are practical, reliable, and easy to evolve over time.
+
+I have been involved in multiple production projects, contributing to both greenfield development and ongoing product improvements. Coming from a Serbian–Chinese background, I am comfortable working in diverse, international environments and collaborating across different cultures and time zones.
+
+A selection of my recent work can be viewed here:
+[https://clearrise.netlify.app/]
+
+If you are currently seeking a developer to support ongoing development, enhance an existing product, or build a custom solution from the ground up, I would welcome the opportunity to connect and discuss how I could contribute to your team.
+
+Thank you very much for your time and consideration.
+
+Kind regards,
+Luka Wang

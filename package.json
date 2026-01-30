@@ -1,0 +1,13 @@
+{
+  "name": "email-picker-sender",
+  "version": "1.0.0",
+  "description": "Email picker and sender using Hotmail/Outlook",
+  "main": "email-sender.js",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "nodemailer": "^6.9.16"
+  },
+  "scripts": {
+    "send": "node email-sender.js"
+  }
+}
