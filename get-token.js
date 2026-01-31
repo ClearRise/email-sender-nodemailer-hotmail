@@ -71,7 +71,7 @@ server.listen(PORT, () => {
       response_type: "code",
       redirect_uri: REDIRECT_URI,
       response_mode: "query",
-      scope: "offline_access https://graph.microsoft.com/Mail.Send",
+      scope: "offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read",
       prompt: "consent",
     });
 

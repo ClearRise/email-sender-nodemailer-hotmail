@@ -42,7 +42,7 @@ async function getAccessToken() {
       client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
-      scope: 'https://graph.microsoft.com/Mail.Send',
+      scope: 'https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read',
     }),
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
   );
@@ -125,7 +125,11 @@ async function main() {
       process.stdout.write(`\rSent: ${sent}/${recipients.length}`);
     } catch (err) {
       failed++;
-      console.error(`\nFailed to send to ${to}:`, err.response?.data?.error?.message || err.message);
+      const detail = err.response?.data;
+      const msg = detail?.error?.message || detail?.error?.code || err.message;
+      const full = detail ? JSON.stringify(detail) : msg;
+      console.error(`\nFailed to send to ${to}:`, msg);
+      if (err.response?.status === 401 && detail) console.error('  401 detail:', full);
     }
   }
 
