@@ -25,17 +25,11 @@ const authUrl =
     response_type: "code",
     redirect_uri: REDIRECT_URI,
     response_mode: "query",
-    scope: "offline_access Mail.Send",
+    scope: "offline_access https://outlook.office.com/SMTP.Send",
   });
 
-open(authUrl);
-
-http
-  .createServer(async (req, res) => {
-    const code = new URL(req.url, REDIRECT_URI).searchParams.get("code");
-
-    if (!code) return;
-
+const server = http.createServer(async (req, res) => {
+  try {
     const tokenRes = await axios.post(
       `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`,
       qs.stringify({
@@ -49,7 +43,17 @@ http
     );
 
     console.log("TOKENS:", tokenRes.data);
-    res.end("Authorization successful. You can close this.");
-    process.exit();
-  })
-  .listen(PORT, () => console.log(`Listening on ${REDIRECT_URI} - complete sign-in in browser`));
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.end("<p>Authorization successful. You can close this tab.</p>");
+  } catch (err) {
+    console.error("Token error:", err.response?.data || err.message);
+    res.writeHead(500, { "Content-Type": "text/html" });
+    res.end("<p>Error getting token. Check console.</p>");
+  }
+  process.exit();
+});
+
+server.listen(PORT, () => {
+  console.log(`Listening on ${REDIRECT_URI} - complete sign-in in browser`);
+  open(authUrl); 
+});
