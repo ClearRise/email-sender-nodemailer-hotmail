@@ -17,7 +17,7 @@ const axios = require('axios');
 const SCRIPT_DIR = __dirname;
 const MESSAGE_FILE = path.join(SCRIPT_DIR, 'bid_text.txt');
 
-const SMTP_SCOPE = 'https://outlook.office.com/SMTP.Send';
+const SMTP_SCOPE = 'https://graph.microsoft.com/SMTP.Send';
 
 function loadEmails() {
   const receiversDir = path.join(SCRIPT_DIR, 'receivers');
