@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 const path = require('path');
+const qs = require('querystring');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 /**
- * Email sender using Hotmail/Outlook SMTP with OAuth2.
- * Setup: Run get-token.js, add OAUTH_REFRESH_TOKEN and OAuth credentials to .env
+ * Email sender using Microsoft Graph API (works with Hotmail/personal accounts).
+ * Setup: Add Mail.Send (Microsoft Graph, delegated) in Azure API permissions.
+ * Run get-token.js, add OAUTH_REFRESH_TOKEN and OAuth credentials to .env
  * Usage: node email-sender.js
  */
 
 const fs = require('fs');
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 
 const SCRIPT_DIR = __dirname;
 const MESSAGE_FILE = path.join(SCRIPT_DIR, 'bid_text.txt');
@@ -25,6 +27,46 @@ function loadEmails() {
   const content = fs.readFileSync(emailFile, 'utf-8');
   const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   return [...new Set(lines)];
+}
+
+async function getAccessToken() {
+  const refreshToken = process.env.OAUTH_REFRESH_TOKEN;
+  const clientId = process.env.OAUTH_CLIENT_ID;
+  const clientSecret = process.env.OAUTH_CLIENT_SECRET;
+  const tenantId = process.env.OAUTH_TENANT_ID;
+
+  const res = await axios.post(
+    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+    qs.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+      scope: 'https://graph.microsoft.com/Mail.Send',
+    }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+  return res.data.access_token;
+}
+
+async function sendViaGraph(accessToken, fromEmail, to, subject, body) {
+  await axios.post(
+    'https://graph.microsoft.com/v1.0/me/sendMail',
+    {
+      message: {
+        subject,
+        body: { contentType: 'Text', content: body },
+        toRecipients: [{ emailAddress: { address: to } }],
+      },
+      saveToSentItems: true,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
 }
 
 async function main() {
@@ -62,28 +104,14 @@ async function main() {
 
   console.log(`Recipients: ${recipients.length}`);
   console.log(`Subject: ${subject}`);
-  const transporter = nodemailer.createTransport({
-    host: 'smtp-mail.outlook.com',
-    port: 587,
-    secure: false,
-    auth: {
-      type: 'OAuth2',
-      user: email,
-      clientId,
-      clientSecret,
-      refreshToken,
-      accessUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-      customParams: { scope: 'offline_access https://outlook.office.com/SMTP.Send' },
-    },
-  });
 
-  // Verify connection
+  let accessToken;
   try {
-    await transporter.verify();
-    console.log('Connected to Outlook SMTP.');
+    accessToken = await getAccessToken();
+    console.log('Got access token.');
   } catch (err) {
-    console.error('SMTP connection failed:', err.message);
-    console.error('Refresh token may be expired. Run get-token.js again.');
+    console.error('Token refresh failed:', err.response?.data?.error_description || err.message);
+    console.error('Run get-token.js again. Add Mail.Send (Microsoft Graph) in Azure API permissions.');
     process.exit(1);
   }
 
@@ -92,17 +120,12 @@ async function main() {
 
   for (const to of recipients) {
     try {
-      await transporter.sendMail({
-        from: `"${email.split('@')[0]}" <${email}>`,
-        to,
-        subject,
-        text: body,
-      });
+      await sendViaGraph(accessToken, email, to, subject, body);
       sent++;
       process.stdout.write(`\rSent: ${sent}/${recipients.length}`);
     } catch (err) {
       failed++;
-      console.error(`\nFailed to send to ${to}:`, err.message);
+      console.error(`\nFailed to send to ${to}:`, err.response?.data?.error?.message || err.message);
     }
   }
 
