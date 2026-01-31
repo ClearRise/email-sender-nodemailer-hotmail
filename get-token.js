@@ -61,7 +61,13 @@ const server = http.createServer(async (req, res) => {
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
 
-    console.log("TOKENS:", tokenRes.data);
+    const { access_token, refresh_token, expires_in } = tokenRes.data;
+    const expiresAt = expires_in ? Date.now() + expires_in * 1000 : null;
+    console.log("\n--- Add to .env ---");
+    console.log(`OAUTH_REFRESH_TOKEN=${refresh_token}`);
+    if (access_token) console.log(`OAUTH_ACCESS_TOKEN=${access_token}`);
+    if (expiresAt) console.log(`OAUTH_ACCESS_TOKEN_EXPIRES=${expiresAt}`);
+    console.log("-------------------\n");
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end("<p>Authorization successful. You can close this tab.</p>");
   } catch (err) {

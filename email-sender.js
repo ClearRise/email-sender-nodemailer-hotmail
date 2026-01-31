@@ -3,12 +3,8 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 /**
- * Email sender using Hotmail/Outlook SMTP.
- * Supports OAuth2 (recommended) or basic auth.
- *
- * OAuth2 setup: Run get-token.js, add OAUTH_REFRESH_TOKEN to .env
- * Basic auth: HOTMAIL_EMAIL + HOTMAIL_PASSWORD (if SMTP AUTH enabled)
- *
+ * Email sender using Hotmail/Outlook SMTP with OAuth2.
+ * Setup: Run get-token.js, add OAUTH_REFRESH_TOKEN and OAuth credentials to .env
  * Usage: node email-sender.js
  */
 
@@ -37,17 +33,14 @@ async function main() {
   const clientId = process.env.OAUTH_CLIENT_ID;
   const clientSecret = process.env.OAUTH_CLIENT_SECRET;
   const tenantId = process.env.OAUTH_TENANT_ID;
-  const password = process.env.HOTMAIL_PASSWORD || process.env.HOTMAIL_APP_PASSWORD || process.env.OUTLOOK_PASSWORD;
-
-  const useOAuth = refreshToken && clientId && clientSecret && tenantId;
 
   if (!email) {
     console.error('Error: Set HOTMAIL_EMAIL in .env');
     process.exit(1);
   }
 
-  if (!useOAuth && !password) {
-    console.error('Error: Use OAuth2 (OAUTH_REFRESH_TOKEN, etc.) or set HOTMAIL_PASSWORD');
+  if (!refreshToken || !clientId || !clientSecret || !tenantId) {
+    console.error('Error: Set OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_TENANT_ID, OAUTH_REFRESH_TOKEN in .env');
     process.exit(1);
   }
 
@@ -69,25 +62,19 @@ async function main() {
 
   console.log(`Recipients: ${recipients.length}`);
   console.log(`Subject: ${subject}`);
-  console.log(`Auth: ${useOAuth ? 'OAuth2' : 'password'}`);
-
   const transporter = nodemailer.createTransport({
     host: 'smtp-mail.outlook.com',
     port: 587,
     secure: false,
-    auth: useOAuth
-      ? {
-          type: 'OAuth2',
-          user: email,
-          clientId,
-          clientSecret,
-          refreshToken,
-          accessUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-        }
-      : {
-          user: email,
-          pass: password,
-        },
+    auth: {
+      type: 'OAuth2',
+      user: email,
+      clientId,
+      clientSecret,
+      refreshToken,
+      accessUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+      customParams: { scope: 'offline_access https://outlook.office.com/SMTP.Send' },
+    },
   });
 
   // Verify connection
@@ -96,11 +83,7 @@ async function main() {
     console.log('Connected to Outlook SMTP.');
   } catch (err) {
     console.error('SMTP connection failed:', err.message);
-    if (useOAuth) {
-      console.error('Refresh token may be expired. Run get-token.js again.');
-    } else {
-      console.error('Check your email/password. With 2FA, use an App Password.');
-    }
+    console.error('Refresh token may be expired. Run get-token.js again.');
     process.exit(1);
   }
 
