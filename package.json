@@ -4,8 +4,10 @@
   "description": "Email picker and sender using Hotmail/Outlook",
   "main": "email-sender.js",
   "dependencies": {
+    "axios": "^1.13.4",
     "dotenv": "^16.4.5",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^6.9.16",
+    "open": "^11.0.0"
   },
   "scripts": {
     "send": "node email-sender.js"
