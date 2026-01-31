@@ -1,4 +1,5 @@
 const path = require("path");
+const crypto = require("crypto");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const open = require("open").default;
@@ -9,14 +10,20 @@ const qs = require("querystring");
 const CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
 const TENANT_ID = process.env.OAUTH_TENANT_ID;
-// Web platform: use port 80, http://localhost (required for client_secret refresh). Run terminal as Administrator.
-const PORT = parseInt(process.env.OAUTH_PORT || "80", 10);
-const REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || (PORT === 80 ? "http://localhost" : `http://localhost:${PORT}`);
+// Use port 3000 by default (no admin needed). Add http://localhost:3000 as SPA redirect URI in Azure.
+const PORT = parseInt(process.env.OAUTH_PORT || "3000", 10);
+const REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || `http://localhost:${PORT}`;
 
 if (!CLIENT_ID || !CLIENT_SECRET || !TENANT_ID) {
   console.error("Error: Set OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_TENANT_ID in .env");
   process.exit(1);
 }
+
+function base64UrlEncode(buf) {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+let codeVerifier;
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, REDIRECT_URI);
@@ -46,6 +53,7 @@ const server = http.createServer(async (req, res) => {
         code,
         redirect_uri: REDIRECT_URI,
         grant_type: "authorization_code",
+        code_verifier: codeVerifier,
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
@@ -64,6 +72,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+  codeVerifier = base64UrlEncode(crypto.randomBytes(32));
+  const codeChallenge = base64UrlEncode(crypto.createHash("sha256").update(codeVerifier).digest());
+
   const authUrl =
     `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize?` +
     qs.stringify({
@@ -73,6 +84,8 @@ server.listen(PORT, () => {
       response_mode: "query",
       scope: "offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read",
       prompt: "consent",
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
     });
 
   console.log(`Listening on ${REDIRECT_URI} - complete sign-in in browser`);
