@@ -18,6 +18,15 @@ const MESSAGE_FILE = path.join(SCRIPT_DIR, 'bid_text.txt');
 
 const GRAPH_SCOPE = 'https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read';
 
+function getUserIdFromToken(accessToken) {
+  try {
+    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
+    return payload.oid || payload.sub;
+  } catch {
+    return null;
+  }
+}
+
 function loadEmails() {
   const receiversDir = path.join(SCRIPT_DIR, 'receivers');
   const emailFile = path.join(receiversDir, 'email.txt');
@@ -51,9 +60,13 @@ async function getAccessToken() {
   return res.data.access_token;
 }
 
-async function sendViaGraph(accessToken, to, subject, body) {
+async function sendViaGraph(accessToken, userId, to, subject, body) {
+  const url = userId
+    ? `https://graph.microsoft.com/v1.0/users/${userId}/sendMail`
+    : 'https://graph.microsoft.com/v1.0/me/sendMail';
+
   await axios.post(
-    'https://graph.microsoft.com/v1.0/me/sendMail',
+    url,
     {
       message: {
         subject,
@@ -117,19 +130,24 @@ async function main() {
     process.exit(1);
   }
 
+  const userId = getUserIdFromToken(accessToken);
+
   let sent = 0;
   let failed = 0;
 
   for (const to of recipients) {
     try {
-      await sendViaGraph(accessToken, to, subject, body);
+      await sendViaGraph(accessToken, userId, to, subject, body);
       sent++;
       process.stdout.write(`\rSent: ${sent}/${recipients.length}`);
     } catch (err) {
       failed++;
       const detail = err.response?.data?.error;
-      const msg = detail?.message || err.response?.data?.error?.code || err.message;
+      const msg = detail?.message || detail?.code || err.message;
       console.error(`\nFailed to send to ${to}:`, msg);
+      if (err.response?.status === 401 && err.response?.data) {
+        console.error('  Graph 401 detail:', JSON.stringify(err.response.data, null, 2));
+      }
     }
   }
 
