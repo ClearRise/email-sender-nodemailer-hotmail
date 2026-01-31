@@ -29,6 +29,15 @@ function loadEmails() {
   return [...new Set(lines)];
 }
 
+function getUserIdFromToken(accessToken) {
+  try {
+    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
+    return payload.oid || payload.sub;
+  } catch {
+    return null;
+  }
+}
+
 async function getAccessToken() {
   const refreshToken = process.env.OAUTH_REFRESH_TOKEN;
   const clientId = process.env.OAUTH_CLIENT_ID;
@@ -49,9 +58,13 @@ async function getAccessToken() {
   return res.data.access_token;
 }
 
-async function sendViaGraph(accessToken, fromEmail, to, subject, body) {
+async function sendViaGraph(accessToken, userId, to, subject, body) {
+  const url = userId
+    ? `https://graph.microsoft.com/v1.0/users/${userId}/sendMail`
+    : 'https://graph.microsoft.com/v1.0/me/sendMail';
+
   await axios.post(
-    'https://graph.microsoft.com/v1.0/me/sendMail',
+    url,
     {
       message: {
         subject,
@@ -118,9 +131,11 @@ async function main() {
   let sent = 0;
   let failed = 0;
 
+  const userId = getUserIdFromToken(accessToken);
+
   for (const to of recipients) {
     try {
-      await sendViaGraph(accessToken, email, to, subject, body);
+      await sendViaGraph(accessToken, userId, to, subject, body);
       sent++;
       process.stdout.write(`\rSent: ${sent}/${recipients.length}`);
     } catch (err) {
