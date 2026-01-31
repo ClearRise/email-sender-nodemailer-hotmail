@@ -4,17 +4,20 @@ const qs = require('querystring');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 /**
- * Email sender using Microsoft Graph API (works with Hotmail/personal accounts).
- * Setup: Add Mail.Send (Microsoft Graph, delegated) in Azure API permissions.
- * Run get-token.js, add OAUTH_REFRESH_TOKEN and OAuth credentials to .env
+ * Email sender using SMTP + OAuth2 (works with Hotmail/Outlook.com personal accounts).
+ * Uses https://outlook.office.com/SMTP.Send scope - Graph API /sendMail returns 401 for personal accounts.
+ * Setup: Run get-token.js with SMTP scope, add OAUTH_REFRESH_TOKEN to .env
  * Usage: node email-sender.js
  */
 
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 const axios = require('axios');
 
 const SCRIPT_DIR = __dirname;
 const MESSAGE_FILE = path.join(SCRIPT_DIR, 'bid_text.txt');
+
+const SMTP_SCOPE = 'https://outlook.office.com/SMTP.Send';
 
 function loadEmails() {
   const receiversDir = path.join(SCRIPT_DIR, 'receivers');
@@ -27,15 +30,6 @@ function loadEmails() {
   const content = fs.readFileSync(emailFile, 'utf-8');
   const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   return [...new Set(lines)];
-}
-
-function getUserIdFromToken(accessToken) {
-  try {
-    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
-    return payload.oid || payload.sub;
-  } catch {
-    return null;
-  }
 }
 
 async function getAccessToken() {
@@ -51,35 +45,26 @@ async function getAccessToken() {
       client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
-      scope: 'https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read',
+      scope: SMTP_SCOPE,
     }),
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
   );
   return res.data.access_token;
 }
 
-async function sendViaGraph(accessToken, userId, to, subject, body) {
-  const url = userId
-    ? `https://graph.microsoft.com/v1.0/users/${userId}/sendMail`
-    : 'https://graph.microsoft.com/v1.0/me/sendMail';
+async function createTransporter(email) {
+  const accessToken = await getAccessToken();
 
-  await axios.post(
-    url,
-    {
-      message: {
-        subject,
-        body: { contentType: 'Text', content: body },
-        toRecipients: [{ emailAddress: { address: to } }],
-      },
-      saveToSentItems: true,
+  return nodemailer.createTransport({
+    host: 'smtp-mail.outlook.com',
+    port: 587,
+    secure: false,
+    auth: {
+      type: 'OAuth2',
+      user: email,
+      accessToken,
     },
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  });
 }
 
 async function main() {
@@ -118,36 +103,37 @@ async function main() {
   console.log(`Recipients: ${recipients.length}`);
   console.log(`Subject: ${subject}`);
 
-  let accessToken;
+  let transporter;
   try {
-    accessToken = await getAccessToken();
-    console.log('Got access token.');
+    transporter = await createTransporter(email);
+    console.log('Got access token. Sending via SMTP…');
   } catch (err) {
     console.error('Token refresh failed:', err.response?.data?.error_description || err.message);
-    console.error('Run get-token.js again. Add Mail.Send (Microsoft Graph) in Azure API permissions.');
+    console.error('Run get-token.js again to get a new refresh token with SMTP scope.');
     process.exit(1);
   }
 
   let sent = 0;
   let failed = 0;
 
-  const userId = getUserIdFromToken(accessToken);
-
   for (const to of recipients) {
     try {
-      await sendViaGraph(accessToken, userId, to, subject, body);
+      await transporter.sendMail({
+        from: email,
+        to,
+        subject,
+        text: body,
+      });
       sent++;
       process.stdout.write(`\rSent: ${sent}/${recipients.length}`);
     } catch (err) {
       failed++;
-      const detail = err.response?.data;
-      const msg = detail?.error?.message || detail?.error?.code || err.message;
-      const full = detail ? JSON.stringify(detail) : msg;
+      const msg = err.response || err.message;
       console.error(`\nFailed to send to ${to}:`, msg);
-      if (err.response?.status === 401 && detail) console.error('  401 detail:', full);
     }
   }
 
+  transporter.close();
   console.log(`\n\nDone. Sent: ${sent}, Failed: ${failed}`);
 }
 
